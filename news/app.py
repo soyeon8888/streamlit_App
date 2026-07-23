@@ -34,7 +34,7 @@ def get_google_news(keyword):
     return feed.entries
 
 # UI 화면 구성
-st.title("📰 API 키 없는 실시간 뉴스 3줄 요약기")
+st.title("📰 실시간 뉴스 3줄 요약기")
 st.caption("회원가입이나 API 키 발급 없이 Google News RSS와 텍스트 분석 알고리즘으로 뉴스를 요약합니다.")
 
 # 사이드바
