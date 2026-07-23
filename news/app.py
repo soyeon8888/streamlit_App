@@ -1,41 +1,60 @@
+import re
 import streamlit as st
 import feedparser
 from urllib.parse import quote
+from bs4 import BeautifulSoup
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lex_rank import LexRankSummarizer
 
 # 페이지 기본 설정
-st.set_page_config(page_title="API 키 없는 뉴스 요약기", layout="wide", page_icon="📰")
+st.set_page_config(page_title="실시간 뉴스 3줄 요약기", layout="wide", page_icon="📰")
 
-# 텍스트 추출 및 요약 함수 (API 키 필요 없음)
+# 1. HTML 태그 제거 함수 (지저분한 링크/태그 삭제)
+def clean_html(raw_html):
+    if not raw_html:
+        return ""
+    soup = BeautifulSoup(raw_html, "html.parser")
+    text = soup.get_text() # HTML 태그 완전히 제거
+    # 특수문자 정리
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+# 2. 텍스트 추출 및 요약 함수
 def summarize_text(text, sentence_count=3):
-    if not text or len(text) < 50:
-        return "요약할 본문 내용이 충분하지 않습니다."
+    clean_text = clean_html(text)
+    
+    if not clean_text or len(clean_text) < 30:
+        return "• 요약할 본문 내용이 충분하지 않습니다."
     
     try:
-        # sumy 라이브러리를 사용한 문장 알고리즘 요약
-        parser = PlaintextParser.from_string(text, Tokenizer("korean"))
+        # sumy 라이브러리를 사용한 알고리즘 요약
+        parser = PlaintextParser.from_string(clean_text, Tokenizer("korean"))
         summarizer = LexRankSummarizer()
         summary = summarizer(parser.document, sentence_count)
         
         result = [f"• {str(sentence)}" for sentence in summary]
-        return "\n".join(result) if result else text
+        if result:
+            return "\n".join(result)
     except Exception:
-        # 한국어 토크나이저 예외 시 간단한 줄바꿈 처리
-        sentences = [s.strip() for s in text.split('.') if len(s.strip()) > 10]
-        return "\n".join([f"• {s}." for s in sentences[:3]])
+        pass
 
-# Google News RSS 수집 함수
+    # 예외 발생 시 문장 단위로 잘라 3문장 출력
+    sentences = [s.strip() for s in clean_text.split('.') if len(s.strip()) > 5]
+    if sentences:
+        return "\n".join([f"• {s}." for s in sentences[:sentence_count]])
+    return f"• {clean_text}"
+
+# 3. Google News RSS 수집 함수
 def get_google_news(keyword):
     encoded_keyword = quote(keyword)
     rss_url = f"https://news.google.com/rss/search?q={encoded_keyword}&hl=ko&gl=KR&ceid=KR:ko"
     feed = feedparser.parse(rss_url)
     return feed.entries
 
-# UI 화면 구성
+# --- UI 화면 구성 ---
 st.title("📰 실시간 뉴스 3줄 요약기")
-st.caption("회원가입이나 API 키 발급 없이 Google News RSS와 텍스트 분석 알고리즘으로 뉴스를 요약합니다.")
+st.caption("Google News RSS와 텍스트 분석 알고리즘으로 깨끗한 한국어 요약문을 생성합니다.")
 
 # 사이드바
 with st.sidebar:
@@ -59,12 +78,13 @@ if search_btn:
                 st.markdown("---")
                 
                 for idx, item in enumerate(articles[:news_count], 1):
-                    title = item.title
+                    # 제목과 요약본 모두 HTML 태그 정화
+                    title = clean_html(item.title)
                     link = item.link
                     published = getattr(item, 'published', '날짜 정보 없음')
                     snippet = getattr(item, 'summary', title)
                     
-                    # 뉴스요약 수행
+                    # 뉴스 요약 수행
                     summary = summarize_text(snippet, sentence_count=3)
                     
                     # 결과 출력
